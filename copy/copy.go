@@ -114,12 +114,6 @@ func Image(ctx context.Context, policyContext *signature.PolicyContext, destRef,
 		options = &Options{}
 	}
 
-	reportWriter := ioutil.Discard
-
-	if options.ReportWriter != nil {
-		reportWriter = options.ReportWriter
-	}
-
 	dest, err := destRef.NewImageDestination(ctx, options.DestinationCtx)
 	if err != nil {
 		return errors.Wrapf(err, "Error initializing destination %s", transports.ImageName(destRef))
@@ -140,6 +134,17 @@ func Image(ctx context.Context, policyContext *signature.PolicyContext, destRef,
 		}
 	}()
 
+	return ImageR(ctx, policyContext, dest, rawSource, options)
+}
+
+func ImageR(ctx context.Context, policyContext *signature.PolicyContext, dest types.ImageDestination, rawSource types.ImageSource, options *Options) (retErr error) {
+
+	reportWriter := ioutil.Discard
+
+	if options.ReportWriter != nil {
+		reportWriter = options.ReportWriter
+	}
+
 	c := &copier{
 		copiedBlobs:      make(map[digest.Digest]digest.Digest),
 		cachedDiffIDs:    make(map[digest.Digest]digest.Digest),
@@ -153,7 +158,7 @@ func Image(ctx context.Context, policyContext *signature.PolicyContext, destRef,
 	unparsedToplevel := image.UnparsedInstance(rawSource, nil)
 	multiImage, err := isMultiImage(ctx, unparsedToplevel)
 	if err != nil {
-		return errors.Wrapf(err, "Error determining manifest MIME type for %s", transports.ImageName(srcRef))
+		return errors.Wrapf(err, "Error determining manifest MIME type for %s", transports.ImageName(rawSource.Reference()))
 	}
 
 	if !multiImage {
@@ -166,7 +171,7 @@ func Image(ctx context.Context, policyContext *signature.PolicyContext, destRef,
 		// FIXME: Copy to destinations which support manifest lists, one image at a time.
 		instanceDigest, err := image.ChooseManifestInstanceFromManifestList(ctx, options.SourceCtx, unparsedToplevel)
 		if err != nil {
-			return errors.Wrapf(err, "Error choosing an image from manifest list %s", transports.ImageName(srcRef))
+			return errors.Wrapf(err, "Error choosing an image from manifest list %s", transports.ImageName(rawSource.Reference()))
 		}
 		logrus.Debugf("Source is a manifest list; copying (only) instance %s", instanceDigest)
 		unparsedInstance := image.UnparsedInstance(rawSource, &instanceDigest)

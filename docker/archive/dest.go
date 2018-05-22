@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/containers/image/docker/reference"
 	"github.com/containers/image/docker/tarfile"
 	"github.com/containers/image/types"
 	"github.com/pkg/errors"
@@ -14,6 +15,15 @@ type archiveImageDestination struct {
 	*tarfile.Destination // Implements most of types.ImageDestination
 	ref                  archiveReference
 	writer               io.Closer
+}
+
+type WriteCloser struct {
+	io.Writer
+}
+
+func (mwc *WriteCloser) Close() error {
+	// Noop
+	return nil
 }
 
 func newImageDestination(sys *types.SystemContext, ref archiveReference) (types.ImageDestination, error) {
@@ -44,6 +54,20 @@ func newImageDestination(sys *types.SystemContext, ref archiveReference) (types.
 		Destination: tarDest,
 		ref:         ref,
 		writer:      fh,
+	}, nil
+}
+
+func NewImageDestinationWriter(sys *types.SystemContext, ref reference.NamedTagged, writer io.Writer) (types.ImageDestination, error) {
+
+	tarDest := tarfile.NewDestination(writer, ref)
+	if sys != nil && sys.DockerArchiveAdditionalTags != nil {
+		tarDest.AddRepoTags(sys.DockerArchiveAdditionalTags)
+	}
+
+	return &archiveImageDestination{
+		Destination: tarDest,
+		ref:         archiveReference{destinationRef: ref},
+		writer:      &WriteCloser{writer},
 	}, nil
 }
 
